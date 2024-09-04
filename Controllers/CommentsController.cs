@@ -1,11 +1,12 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
-[Route("api/posts/{postId}/[controller]")]
 [ApiController]
+[Route("api/posts/{postId}/[controller]")]
 public class CommentsController : ControllerBase
 {
     private readonly BlogContext _context;
@@ -15,19 +16,48 @@ public class CommentsController : ControllerBase
         _context = context;
     }
 
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<Comment>>> GetComments(int postId)
-    {
-        return await _context.Comments.Where(c => c.PostId == postId).ToListAsync();
-    }
-
+    [Authorize]
     [HttpPost]
-    public async Task<ActionResult<Comment>> CreateComment(int postId, Comment comment)
+    public async Task<IActionResult> AddComment(int postId, [FromBody] Comment comment)
     {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized();
+        }
+
+        var post = await _context.Posts.FindAsync(postId);
+        if (post == null)
+        {
+            return NotFound();
+        }
+
+        comment.UserId = int.Parse(userId);
         comment.PostId = postId;
         _context.Comments.Add(comment);
         await _context.SaveChangesAsync();
 
-        return CreatedAtAction(nameof(GetComments), new { postId = comment.PostId }, comment);
+        return Ok(comment);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetComments(int postId)
+    {
+        var post = await _context.Posts
+            .Include(p => p.Comments)
+            .ThenInclude(c => c.User)
+            .FirstOrDefaultAsync(p => p.Id == postId);
+
+        if (post == null) return NotFound();
+
+        var comments = post.Comments.Select(c => new
+        {
+            c.Id,
+            c.Body,
+            Author = c.User.Username,
+            c.CreatedAt
+        });
+
+        return Ok(comments);
     }
 }
