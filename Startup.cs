@@ -57,6 +57,10 @@ namespace BlogApi
                 );
             });
             services.AddDbContext<BlogContext>(options => options.UseSqlite("Data Source=blog.db"));
+            services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IPostRepository, PostRepository>();
+            services.AddScoped<ICommentRepository, CommentRepository>();
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
             services
                 .AddControllers()
                 .AddNewtonsoftJson(options =>

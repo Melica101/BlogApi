@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -11,11 +10,11 @@ using Microsoft.EntityFrameworkCore;
 [Route("api/[controller]")]
 public class PostsController : ControllerBase
 {
-    private readonly BlogContext _context;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public PostsController(BlogContext context)
+    public PostsController(IUnitOfWork unitOfWork)
     {
-        _context = context;
+        _unitOfWork = unitOfWork;
     }
 
     [Authorize]
@@ -28,86 +27,57 @@ public class PostsController : ControllerBase
             return Unauthorized("User ID not found.");
         }
 
-        // Set the userId and creation date for the post
         post.UserId = int.Parse(userId);
         post.CreatedAt = DateTime.UtcNow;
 
-        // Add the post to the database
-        _context.Posts.Add(post);
-        await _context.SaveChangesAsync();
+        await _unitOfWork.Posts.AddPostAsync(post);
+        await _unitOfWork.CompleteAsync();
 
         return CreatedAtAction(nameof(GetPost), new { id = post.Id }, post);
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetPosts(
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10
-    )
+    public async Task<IActionResult> GetPosts([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
-        var posts = await _context
-            .Posts.Include(p => p.User)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(p => new
-            {
-                p.Id,
-                p.Title,
-                p.Body,
-                Author = p.User.Username,
-                p.CreatedAt,
-            })
-            .ToListAsync();
+        var posts = await _unitOfWork.Posts.GetPostsAsync(page, pageSize);
+        var totalCount = await _unitOfWork.Posts.GetPostsCountAsync();
 
-        var totalCount = await _context.Posts.CountAsync();
+        var result = posts.Select(p => new
+        {
+            p.Id,
+            p.Title,
+            p.Body,
+            Author = p.User.Username,
+            p.CreatedAt
+        });
 
-        return Ok(new { totalCount, posts });
+        return Ok(new { totalCount, posts = result });
     }
 
     [HttpGet("{id}")]
-    public async Task<IActionResult> GetPost(
-        int id,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10
-    )
+    public async Task<IActionResult> GetPost(int id, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
-        var post = await _context.Posts.Include(p => p.User).FirstOrDefaultAsync(p => p.Id == id);
+        var post = await _unitOfWork.Posts.GetPostByIdAsync(id);
+        if (post == null) return NotFound();
 
-        if (post == null)
+        var totalCommentsCount = await _unitOfWork.Comments.GetCommentsCountByPostIdAsync(id);
+        var comments = await _unitOfWork.Comments.GetCommentsByPostIdAsync(id, page, pageSize);
+
+        return Ok(new
         {
-            return NotFound();
-        }
-
-        // Get the total count of comments for this post
-        var totalCommentsCount = await _context.Comments.CountAsync(c => c.PostId == id);
-
-        // Paginate the comments
-        var comments = await _context
-            .Comments.Where(c => c.PostId == id)
-            .Include(c => c.User) // Include the user information for each comment
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(c => new
+            post.Id,
+            post.Title,
+            post.Body,
+            Author = post.User.Username,
+            post.CreatedAt,
+            totalCommentsCount,
+            Comments = comments.Select(c => new
             {
                 c.Id,
                 c.Body,
                 Author = c.User.Username,
-                c.CreatedAt,
+                c.CreatedAt
             })
-            .ToListAsync();
-
-        // Return the post and paginated comments
-        return Ok(
-            new
-            {
-                post.Id,
-                post.Title,
-                post.Body,
-                Author = post.User.Username,
-                post.CreatedAt,
-                totalCommentsCount,
-                Comments = comments,
-            }
-        );
+        });
     }
 }

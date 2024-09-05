@@ -1,7 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 
@@ -9,11 +7,11 @@ using System.Threading.Tasks;
 [Route("api/posts/{postId}/[controller]")]
 public class CommentsController : ControllerBase
 {
-    private readonly BlogContext _context;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public CommentsController(BlogContext context)
+    public CommentsController(IUnitOfWork unitOfWork)
     {
-        _context = context;
+        _unitOfWork = unitOfWork;
     }
 
     [Authorize]
@@ -26,7 +24,7 @@ public class CommentsController : ControllerBase
             return Unauthorized();
         }
 
-        var post = await _context.Posts.FindAsync(postId);
+        var post = await _unitOfWork.Posts.GetPostByIdAsync(postId);
         if (post == null)
         {
             return NotFound();
@@ -34,30 +32,19 @@ public class CommentsController : ControllerBase
 
         comment.UserId = int.Parse(userId);
         comment.PostId = postId;
-        _context.Comments.Add(comment);
-        await _context.SaveChangesAsync();
+
+        await _unitOfWork.Comments.AddCommentAsync(comment);
+        await _unitOfWork.CompleteAsync();
 
         return Ok(comment);
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetComments(int postId)
+    public async Task<IActionResult> GetComments(int postId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
-        var post = await _context.Posts
-            .Include(p => p.Comments)
-            .ThenInclude(c => c.User)
-            .FirstOrDefaultAsync(p => p.Id == postId);
+        var comments = await _unitOfWork.Comments.GetCommentsByPostIdAsync(postId, page, pageSize);
+        var totalCommentsCount = await _unitOfWork.Comments.GetCommentsCountByPostIdAsync(postId);
 
-        if (post == null) return NotFound();
-
-        var comments = post.Comments.Select(c => new
-        {
-            c.Id,
-            c.Body,
-            Author = c.User.Username,
-            c.CreatedAt
-        });
-
-        return Ok(comments);
+        return Ok(new { totalCommentsCount, Comments = comments });
     }
 }
