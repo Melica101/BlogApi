@@ -80,4 +80,65 @@ public class PostsController : ControllerBase
             })
         });
     }
+
+    [Authorize]
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdatePost(int id, [FromBody] Post post)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (userId == null)
+        {
+            return Unauthorized("User ID not found.");
+        }
+
+        var existingPost = await _unitOfWork.Posts.GetPostByIdAsync(id);
+        if (existingPost == null)
+        {
+            return NotFound("Post not found.");
+        }
+
+        // Ensure the user owns the post before allowing an update
+        if (existingPost.UserId != int.Parse(userId))
+        {
+            return Forbid("You are not allowed to update this post.");
+        }
+
+        // Update the post's details
+        existingPost.Title = post.Title;
+        existingPost.Body = post.Body;
+
+        await _unitOfWork.Posts.UpdatePostAsync(existingPost);
+        await _unitOfWork.CompleteAsync();
+
+        return Ok(existingPost);
+    }
+
+    // Delete a post
+    [Authorize]
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeletePost(int id)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (userId == null)
+        {
+            return Unauthorized("User ID not found.");
+        }
+
+        var post = await _unitOfWork.Posts.GetPostByIdAsync(id);
+        if (post == null)
+        {
+            return NotFound("Post not found.");
+        }
+
+        // Ensure the user owns the post before allowing deletion
+        if (post.UserId != int.Parse(userId))
+        {
+            return Forbid("You are not allowed to delete this post.");
+        }
+
+        await _unitOfWork.Posts.DeletePostAsync(post);
+        await _unitOfWork.CompleteAsync();
+
+        return Ok("Post deleted successfully.");
+    }
 }
