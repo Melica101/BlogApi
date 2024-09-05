@@ -65,7 +65,6 @@ namespace BlogApi
                 .AddControllers()
                 .AddNewtonsoftJson(options =>
                 {
-                    // This will ignore circular references
                     options.SerializerSettings.ReferenceLoopHandling = Newtonsoft
                         .Json
                         .ReferenceLoopHandling

@@ -103,7 +103,6 @@ public class PostsController : ControllerBase
             return Forbid("You are not allowed to update this post.");
         }
 
-        // Update the post's details
         existingPost.Title = post.Title;
         existingPost.Body = post.Body;
 
@@ -113,7 +112,6 @@ public class PostsController : ControllerBase
         return Ok(existingPost);
     }
 
-    // Delete a post
     [Authorize]
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeletePost(int id)

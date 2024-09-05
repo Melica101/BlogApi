@@ -3,12 +3,12 @@ using System.Collections.Generic;
 
 public class Post
 {
-    public int Id { get; set; }              // Primary key
-    public string Title { get; set; }         // Post title
-    public string Body { get; set; }          // Post content
+    public int Id { get; set; }              
+    public string Title { get; set; }         
+    public string Body { get; set; }          
     public int UserId { get; set; }           // Foreign key to the user (author)
     public User User { get; set; }            // Navigation property to the User
     public ICollection<Comment> Comments { get; set; } = new List<Comment>(); // Related comments
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;  // Timestamp for post creation
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
